@@ -1,129 +1,277 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
-import { ObservacionesCard } from '../ui/ObservacionesCard'
-import { safeNumber } from '../../hooks/useSheetData'
+import { useState, useEffect, useCallback } from 'react'
+import Papa from 'papaparse'
 
-export function SentimentSection({ data, capturas = [], observaciones, loading }) {
-  const [currentSlide, setCurrentSlide] = useState(0)
+const SHEET_ID = import.meta.env.VITE_SHEET_ID
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl bg-white/10 h-80 animate-pulse" />
-          <div className="rounded-2xl bg-white/10 h-80 animate-pulse" />
-        </div>
-      </div>
-    )
-  }
-
-  if (!data) {
-    return (
-      <div className="space-y-6">
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-purple-500/20"><MessageSquare className="w-6 h-6 text-purple-400" /></div>
-          <div><h1 className="text-2xl font-bold text-white">Sentiment</h1><p className="text-white/60 text-sm">Sin datos para este mes</p></div>
-        </motion.div>
-      </div>
-    )
-  }
-
-  const positivo = safeNumber(data.positivo_pct)
-  const neutro = safeNumber(data.neutro_pct)
-  const negativo = safeNumber(data.negativo_pct)
-  const descripcion = data.descripcion || ''
-  const sortedCapturas = [...capturas].sort((a, b) => safeNumber(a.orden) - safeNumber(b.orden))
-
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % sortedCapturas.length)
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + sortedCapturas.length) % sortedCapturas.length)
-
-  return (
-    <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-purple-500/20"><MessageSquare className="w-6 h-6 text-purple-400" /></div>
-        <div><h1 className="text-2xl font-bold text-white">Sentiment</h1><p className="text-white/60 text-sm">Análisis de percepción</p></div>
-      </motion.div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 p-6">
-          <h3 className="text-base font-semibold text-white mb-6">Distribución de Sentiment</h3>
-          <div className="flex flex-col gap-4">
-            <SentimentBar label="Positivo" value={positivo} color="#22c55e" bgColor="rgba(34, 197, 94, 0.2)" />
-            <SentimentBar label="Neutro" value={neutro} color="#facc15" bgColor="rgba(250, 204, 21, 0.2)" />
-            <SentimentBar label="Negativo" value={negativo} color="#ef4444" bgColor="rgba(239, 68, 68, 0.2)" />
-          </div>
-          <div className="mt-8 flex justify-center gap-6">
-            <SemaphoreLight color="#22c55e" value={positivo} isActive={positivo >= neutro && positivo >= negativo} />
-            <SemaphoreLight color="#facc15" value={neutro} isActive={neutro > positivo && neutro > negativo} />
-            <SemaphoreLight color="#ef4444" value={negativo} isActive={negativo > positivo && negativo > neutro} />
-          </div>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 p-6">
-          <h3 className="text-base font-semibold text-white mb-4">Análisis Cualitativo</h3>
-          <p className="text-white/80 leading-relaxed text-base">{descripcion || 'Sin descripción disponible.'}</p>
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: positivo >= neutro && positivo >= negativo ? '#22c55e' : negativo > positivo ? '#ef4444' : '#facc15' }} />
-              <span className="text-sm text-white/70">Sentiment predominante: <span className="font-medium text-white">{positivo >= neutro && positivo >= negativo ? 'Positivo' : negativo > positivo ? 'Negativo' : 'Neutro'}</span></span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {sortedCapturas.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 p-6">
-          <h3 className="text-base font-semibold text-white mb-4">Comentarios Destacados</h3>
-          <div className="relative">
-            <div className="overflow-hidden rounded-xl">
-              <AnimatePresence mode="wait">
-                <motion.div key={currentSlide} initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="aspect-video bg-black/20 rounded-xl overflow-hidden">
-                  <img src={sortedCapturas[currentSlide]?.imagen_url} alt={`Captura ${currentSlide + 1}`} className="w-full h-full object-contain" />
-                </motion.div>
-              </AnimatePresence>
-            </div>
-            {sortedCapturas.length > 1 && (
-              <>
-                <button onClick={prevSlide} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70"><ChevronLeft className="w-5 h-5 text-white" /></button>
-                <button onClick={nextSlide} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70"><ChevronRight className="w-5 h-5 text-white" /></button>
-              </>
-            )}
-            {sortedCapturas.length > 1 && (
-              <div className="flex justify-center gap-2 mt-4">
-                {sortedCapturas.map((_, idx) => <button key={idx} onClick={() => setCurrentSlide(idx)} className={`w-2 h-2 rounded-full transition-all ${idx === currentSlide ? 'bg-white w-6' : 'bg-white/30'}`} />)}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {observaciones && <ObservacionesCard observacion={observaciones} />}
-    </div>
-  )
+function getSheetURL(sheetName) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`
 }
 
-function SentimentBar({ label, value, color, bgColor }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-white/70">{label}</span>
-        <span className="text-lg font-bold font-mono" style={{ color }}>{value}%</span>
-      </div>
-      <div className="h-3 rounded-full overflow-hidden" style={{ backgroundColor: bgColor }}>
-        <motion.div initial={{ width: 0 }} animate={{ width: `${value}%` }} transition={{ duration: 0.8 }} className="h-full rounded-full" style={{ backgroundColor: color }} />
-      </div>
-    </div>
-  )
+async function fetchSheet(sheetName) {
+  const response = await fetch(getSheetURL(sheetName))
+  const csvText = await response.text()
+  const { data } = Papa.parse(csvText, { header: true, skipEmptyLines: true })
+  return data
 }
 
-function SemaphoreLight({ color, value, isActive }) {
-  return (
-    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-      <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 ${isActive ? 'ring-4 ring-offset-4 ring-offset-transparent' : 'opacity-40'}`}
-        style={{ backgroundColor: color, boxShadow: isActive ? `0 0 30px ${color}80` : 'none', ringColor: color }}>
-        <span className="text-lg font-bold text-white drop-shadow-lg">{value}%</span>
-      </div>
-    </motion.div>
-  )
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX #1 — Normalización de fechas → siempre retorna "YYYY-MM"
+//
+// Google Sheets exporta la columna "mes" en distintos formatos según cómo
+// esté formateada la celda:
+//   "2025-12"              → texto correcto, pasa tal cual
+//   "2026-01-01 00:00:00"  → fecha con hora (Enero guardado como tipo Fecha)
+//   "2026-01-31 00:00:00"  → fecha fin-de-mes (TopPosts usa el último día)
+//   46023.0                → serial numérico de Excel
+//   Date object            → ya parseado por PapaParse
+// ─────────────────────────────────────────────────────────────────────────────
+function normalizeMonth(val) {
+  if (!val) return null
+
+  if (val instanceof Date && !isNaN(val)) {
+    return val.toISOString().slice(0, 7)
+  }
+
+  const s = String(val).trim()
+
+  // Ya está en formato correcto "YYYY-MM"
+  if (/^\d{4}-\d{2}$/.test(s)) return s
+
+  // Fecha completa "YYYY-MM-DD..." — TopPosts usa el último día del mes
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7)
+
+  // Serial numérico de Excel (días desde 1899-12-30)
+  if (/^\d{4,5}(\.\d+)?$/.test(s)) {
+    const d = new Date((parseFloat(s) - 25569) * 86400000)
+    return d.toISOString().slice(0, 7)
+  }
+
+  return s
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX #2 — TikTok: normalización de nombres de marca
+//
+// La hoja TikTok usa "LA BOTANERA", "Chamoy", "Pacific Mix" en la columna
+// marca, pero el sistema filtra por los IDs "botanera", "chamoy", "pacific".
+// ─────────────────────────────────────────────────────────────────────────────
+const TIKTOK_BRAND_MAP = {
+  'la botanera': 'botanera',
+  'botanera':    'botanera',
+  'chamoy mega': 'chamoy',
+  'chamoy':      'chamoy',
+  'pacific mix': 'pacific',
+  'pacific':     'pacific',
+}
+
+function normalizeTikTokMarca(val) {
+  if (!val) return val
+  return TIKTOK_BRAND_MAP[String(val).trim().toLowerCase()] ?? val
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX #3 — TopPosts: embed_url viene como HTML de <iframe> completo.
+//
+// El componente PostCard espera solo la URL para usarla como src del iframe.
+// Esta función extrae el src si el valor es un bloque HTML, o lo retorna
+// tal cual si ya es una URL limpia.
+// ─────────────────────────────────────────────────────────────────────────────
+function extractEmbedUrl(val) {
+  if (!val) return null
+  const s = String(val).trim()
+  if (s.startsWith('http') && !s.includes('<iframe')) return s
+  const match = s.match(/src="([^"]+)"/)
+  return match ? match[1] : null
+}
+
+// Normaliza fecha y opcionalmente la marca (solo para TikTok)
+function normalizeRows(rows, { normalizeMarca = false } = {}) {
+  return rows.map(r => ({
+    ...r,
+    mes: normalizeMonth(r.mes),
+    ...(normalizeMarca && r.marca ? { marca: normalizeTikTokMarca(r.marca) } : {}),
+  }))
+}
+
+// Normalización especial para TopPosts: fecha + extracción de embed_url
+function normalizePostRows(rows) {
+  return rows.map(r => ({
+    ...r,
+    mes:       normalizeMonth(r.mes),
+    embed_url: extractEmbedUrl(r.embed_url),
+  }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook principal
+// ─────────────────────────────────────────────────────────────────────────────
+export function useSheetData(marcaId) {
+  const [data, setData] = useState({
+    empresa: {},
+    facebook: [],
+    instagram: [],
+    tiktok: [],
+    googleAds: [],
+    googleAdsCiudades: [],
+    googleAdsKeywords: [],
+    campanas: [],
+    topPosts: [],
+    sentiment: [],
+    sentimentCapturas: [],
+    competencia: [],
+    hallazgos: [],
+    observaciones: [],
+  })
+  const [brandConfig, setBrandConfig] = useState(null)
+  const [availableMonths, setAvailableMonths] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const loadData = useCallback(async () => {
+    if (!marcaId) return
+
+    try {
+      setIsRefreshing(true)
+
+      const [
+        configData,
+        marcasData,
+        fbData,
+        igData,
+        ttData,
+        gadsData,
+        gadsCiudadesData,
+        gadsKeywordsData,
+        campanasData,
+        postsData,
+        sentimentData,
+        capturasData,
+        competenciaData,
+        hallazgosData,
+        observacionesData,
+      ] = await Promise.all([
+        fetchSheet('_CONFIG'),
+        fetchSheet('_MARCAS'),
+        fetchSheet('Facebook'),
+        fetchSheet('Instagram'),
+        fetchSheet('TikTok'),
+        fetchSheet('GoogleAds'),
+        fetchSheet('GoogleAds_Ciudades').catch(() => []),
+        fetchSheet('GoogleAds_Keywords').catch(() => []),
+        fetchSheet('Campañas').catch(() => fetchSheet('Campanas').catch(() => [])),
+        fetchSheet('TopPosts'),
+        fetchSheet('Sentiment'),
+        fetchSheet('Sentiment_Capturas').catch(() => []),
+        fetchSheet('Competencia'),
+        fetchSheet('Hallazgos'),
+        fetchSheet('Observaciones').catch(() => []),
+      ])
+
+      // Config global
+      const empresa = {}
+      configData.forEach(row => {
+        if (row.campo && row.valor) empresa[row.campo] = row.valor
+      })
+
+      // Brand config
+      const brand = marcasData.find(b => b.marca_id === marcaId)
+      setBrandConfig(brand)
+
+      // Normalizar todas las hojas
+      const fbNorm       = normalizeRows(fbData)
+      const igNorm       = normalizeRows(igData)
+      const ttNorm       = normalizeRows(ttData, { normalizeMarca: true }) // fix marca TikTok
+      const gadsNorm     = normalizeRows(gadsData)
+      const campNorm     = normalizeRows(campanasData)
+      const sentNorm     = normalizeRows(sentimentData)
+      const captNorm     = normalizeRows(capturasData)
+      const compNorm     = normalizeRows(competenciaData)
+      const hallNorm     = normalizeRows(hallazgosData)
+      const obsNorm      = normalizeRows(observacionesData)
+      const gadsCiudNorm = normalizeRows(gadsCiudadesData)
+      const gadsKwNorm   = normalizeRows(gadsKeywordsData)
+      const postNorm     = normalizePostRows(postsData) // fix embed_url + fecha
+
+      // availableMonths desde todas las fuentes con datos
+      const allMonths = new Set()
+      const addMonths = (arr) =>
+        arr.filter(r => r.marca === marcaId && r.mes).forEach(r => allMonths.add(r.mes))
+
+      addMonths(fbNorm)
+      addMonths(igNorm)
+      addMonths(ttNorm)    // ahora sí encuentra filas tras el fix de marca
+      addMonths(gadsNorm)
+      addMonths(sentNorm)
+
+      setAvailableMonths(Array.from(allMonths).sort().reverse())
+
+      setData({
+        empresa,
+        facebook:          fbNorm.filter(r => r.marca === marcaId),
+        instagram:         igNorm.filter(r => r.marca === marcaId),
+        tiktok:            ttNorm.filter(r => r.marca === marcaId),
+        googleAds:         gadsNorm.filter(r => r.marca === marcaId),
+        googleAdsCiudades: gadsCiudNorm.filter(r => r.marca === marcaId),
+        googleAdsKeywords: gadsKwNorm.filter(r => r.marca === marcaId),
+        campanas:          campNorm.filter(r => r.marca === marcaId),
+        topPosts:          postNorm.filter(r => r.marca === marcaId),
+        sentiment:         sentNorm.filter(r => r.marca === marcaId),
+        sentimentCapturas: captNorm.filter(r => r.marca === marcaId),
+        competencia:       compNorm.filter(r => r.marca === marcaId),
+        hallazgos:         hallNorm.filter(r => r.marca === marcaId),
+        observaciones:     obsNorm.filter(r => r.marca === marcaId),
+      })
+
+      setLoading(false)
+      setIsRefreshing(false)
+      setError(null)
+    } catch (err) {
+      console.error('Error loading data:', err)
+      setError('Error al cargar los datos. Verifica la conexión y el ID del Sheet.')
+      setLoading(false)
+      setIsRefreshing(false)
+    }
+  }, [marcaId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  return { data, brandConfig, availableMonths, loading, error, refresh: loadData, isRefreshing }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utilidades de formato
+// ─────────────────────────────────────────────────────────────────────────────
+export function formatNumber(value) {
+  const num = parseFloat(value)
+  if (isNaN(num) || value === '' || value === null || value === undefined) return '-'
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+  return num.toLocaleString('es-MX')
+}
+
+export function formatCurrency(value) {
+  const num = parseFloat(value)
+  if (isNaN(num) || value === '' || value === null || value === undefined) return '-'
+  return '$' + num.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+export function formatPercent(value) {
+  const num = parseFloat(value)
+  if (isNaN(num) || value === '' || value === null || value === undefined) return null
+  const sign = num >= 0 ? '+' : ''
+  return sign + num.toFixed(1) + '%'
+}
+
+export function formatDecimal(value, decimals = 2) {
+  const num = parseFloat(value)
+  if (isNaN(num) || value === '' || value === null || value === undefined) return '-'
+  return num.toFixed(decimals)
+}
+
+export function safeNumber(value, defaultValue = 0) {
+  const num = parseFloat(value)
+  return isNaN(num) ? defaultValue : num
 }
